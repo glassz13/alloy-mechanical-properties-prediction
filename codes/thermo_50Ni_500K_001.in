@@ -1,0 +1,61 @@
+# Tensile test of Cu-Ni alloy - 50% Ni at 500 K
+
+units           metal
+atom_style      atomic
+
+# Create simulation box and atoms
+lattice         fcc 3.615
+region          box block 0 10 0 10 0 20
+create_box      2 box
+
+# Logging and thermo
+log             thermo.txt
+thermo          100
+thermo_style    custom step temp press pxx pyy pzz lx ly lz
+
+# Create composition (50% Ni)
+create_atoms    1 box
+set             type 1 type/fraction 2 0.50 12345
+
+mass            1 63.546
+mass            2 58.6934
+
+pair_style      eam/alloy
+pair_coeff      * * CuNi.eam.alloy Cu Ni
+
+neighbor        2.0 bin
+neigh_modify    delay 10
+
+group           all type 1 2
+
+# Initial velocities
+velocity        all create 500.0 12345
+
+# Minimization
+minimize        1.0e-4 1.0e-6 100 1000
+
+# Equilibrate pressure to zero with NPT
+fix             equil all npt temp 500.0 500.0 0.1 iso 0.0 0.0 1.0
+run             5000
+
+# Remove equilibration
+unfix           equil
+
+# Deformation: stretch along z
+fix             2 all deform 1 z erate 0.001 units box remap x
+
+# Integrate motion without pressure control
+fix             3 all nve
+
+# Thermostat to maintain temperature
+fix             4 all langevin 500.0 500.0 0.1 12345
+
+# Dump configuration
+dump            1 all custom 100 dump.deform.* id type x y z fx fy fz
+
+# Thermo output
+thermo          100
+thermo_style    custom step temp press pxx pyy pzz lx ly lz
+
+# Run deformation
+run             7000
